@@ -1,13 +1,16 @@
 import os
 import requests
+import asyncio
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from aiohttp import web
 
 # Получаем переменные окружения
 TOKEN = os.getenv('TOKEN')
 USERNAME = os.getenv('USERNAME')
 PASSWORD = os.getenv('PASSWORD')
+PORT = int(os.getenv('PORT', 8443))  # Порт для фиктивного сервера
 
 # URL для авторизации (уточните после анализа)
 LOGIN_URL = 'https://animestars.org/login'
@@ -68,12 +71,35 @@ async def card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text = f"Текущая карта: {current_card}\nВладельцев пока нет или данные недоступны."
     await update.message.reply_text(reply_text)
 
-# Основная функция
-def main():
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("card", card))
-    application.run_polling()
+# Фиктивный HTTP-сервер для Render
+async def handle(request):
+    return web.Response(text="I'm alive!")
+
+# Запуск бота и сервера
+async def main():
+    # Настраиваем Telegram-бот
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("card", card))
+
+    # Запускаем фиктивный HTTP-сервер
+    web_app = web.Application()
+    web_app.router.add_get('/', handle)
+    runner = web.AppRunner(web_app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+    print(f"Fake HTTP server started on port {PORT}")
+
+    # Запускаем polling
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    print("Bot started with polling")
+
+    # Держим приложение запущенным
+    while True:
+        await asyncio.sleep(3600)  # Спим 1 час, чтобы не завершать процесс
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
