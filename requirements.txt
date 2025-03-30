@@ -1,5 +1,4 @@
-requests
-beautifulsoup4
+playwright
 python-telegram-bot==20.6
 aiohttp
-cloudscraper
+beautifulsoup4
