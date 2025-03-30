@@ -21,13 +21,30 @@ LOGIN_URL = 'https://animestars.org/login'
 TARGET_URL = 'https://animestars.org/clubs/137/boost/'
 
 # Создаем сессию с cloudscraper
-session = cloudscraper.create_scraper()
+session = cloudscraper.create_scraper(
+    delay=15,  # Увеличиваем задержку
+    browser={
+        'browser': 'chrome',
+        'platform': 'windows',
+        'mobile': False
+    }
+)
 
-# Функция для извлечения CSRF-токена и других скрытых полей
+# Добавляем реалистичные заголовки
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Referer': 'https://animestars.org/',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+}
+
+# Функция для извлечения данных формы авторизации
 def get_login_form_data():
     try:
         print(f"Получение формы авторизации с {LOGIN_URL}")
-        response = session.get(LOGIN_URL)
+        response = session.get(LOGIN_URL, headers=headers)
         print(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
         if response.status_code != 200:
             print(f"Не удалось загрузить страницу логина: {response.text}")
@@ -39,18 +56,18 @@ def get_login_form_data():
             print("Форма логина не найдена")
             return None
 
-        # Извлекаем скрытые поля
+        # Собираем данные для авторизации
         login_data = {
-            'login': USERNAME,
-            'password': PASSWORD,
-            'login_not_save': '0',  # DLE часто использует это поле
+            'login_name': USERNAME,      # Поле для логина
+            'login_password': PASSWORD,  # Поле для пароля
+            'login_not_save': '0',      # Стандартное поле DLE
         }
 
         # Добавляем все скрытые поля из формы
         for input_tag in form.find_all('input', type='hidden'):
             name = input_tag.get('name')
-            value = input_tag.get('value')
-            if name and value:
+            value = input_tag.get('value', '')  # Устанавливаем пустое значение, если value отсутствует
+            if name:
                 login_data[name] = value
 
         print(f"Собранные данные для авторизации: {login_data}")
@@ -68,16 +85,16 @@ def authenticate():
             return False
 
         print(f"Попытка авторизации с данными: {login_data}")
-        response = session.post(LOGIN_URL, data=login_data)
+        response = session.post(LOGIN_URL, data=login_data, headers=headers)
         print(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
         if response.status_code == 200:
             print("Авторизация успешна")
             # Проверяем наличие cookies для подтверждения авторизации
             if any(cookie.name.startswith('__cf') for cookie in session.cookies):
                 print("Обнаружены Cloudflare cookies, авторизация может быть успешной")
-            # Проверяем, перенаправлены ли мы на главную страницу (успешная авторизация)
+            # Проверяем перенаправление (успешная авторизация)
             if 'login' not in response.url:
-                print("Перенаправление после авторизации: авторизация подтверждена")
+                print(f"Перенаправление после авторизации: {response.url}")
                 return True
             else:
                 print("Авторизация не удалась: остались на странице логина")
@@ -97,7 +114,7 @@ def get_card_info():
     
     print(f"Запрос данных с {TARGET_URL}")
     try:
-        response = session.get(TARGET_URL)
+        response = session.get(TARGET_URL, headers=headers)
         print(f"Статус ответа от {TARGET_URL}: {response.status_code}")
         if response.status_code != 200:
             print(f"Не удалось загрузить страницу: статус {response.status_code}, текст: {response.text}")
