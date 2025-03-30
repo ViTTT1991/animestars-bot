@@ -1,7 +1,5 @@
 import os
 import requests
-import asyncio
-import signal
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -11,7 +9,8 @@ from aiohttp import web
 TOKEN = os.getenv('TOKEN')
 USERNAME = os.getenv('USERNAME')
 PASSWORD = os.getenv('PASSWORD')
-PORT = int(os.getenv('PORT', 8443))  # Порт для фиктивного сервера
+PORT = int(os.getenv('PORT', 8443))  # Порт, который Render предоставляет
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # URL вашего сервиса, например https://your-service.onrender.com
 
 # URL для авторизации (уточните после анализа)
 LOGIN_URL = 'https://animestars.org/login'
@@ -72,50 +71,40 @@ async def card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text = f"Текущая карта: {current_card}\nВладельцев пока нет или данные недоступны."
     await update.message.reply_text(reply_text)
 
-# Фиктивный HTTP-сервер для Render
-async def handle(request):
-    return web.Response(text="I'm alive!")
+# Webhook обработчик
+async def webhook(request):
+    update = Update.de_json(await request.json(), app.bot)
+    await app.process_update(update)
+    return web.Response(text="OK")
 
-# Запуск бота и сервера
+# Основная функция
 async def main():
-    # Настраиваем Telegram-бот
+    global app
     app = Application.builder().token(TOKEN).build()
+    
+    # Добавляем обработчики команд
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("card", card))
 
-    # Запускаем фиктивный HTTP-сервер
+    # Настраиваем webhook
+    await app.bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
+    print(f"Webhook set to {WEBHOOK_URL}/{TOKEN}")
+
+    # Создаем веб-сервер
     web_app = web.Application()
-    web_app.router.add_get('/', handle)
+    web_app.router.add_post(f"/{TOKEN}", webhook)
+    
+    # Запускаем сервер
     runner = web.AppRunner(web_app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()
-    print(f"Fake HTTP server started on port {PORT}")
+    print(f"Server started on port {PORT}")
 
-    # Запускаем polling
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    print("Bot started with polling")
-
-    # Обработка завершения
-    loop = asyncio.get_event_loop()
-    stop = asyncio.Event()
-
-    def handle_shutdown():
-        stop.set()
-
-    loop.add_signal_handler(signal.SIGINT, handle_shutdown)
-    loop.add_signal_handler(signal.SIGTERM, handle_shutdown)
-
-    await stop.wait()  # Ждем сигнала завершения
-
-    # Останавливаем polling и приложение
-    print("Shutting down bot...")
-    await app.updater.stop()
-    await app.stop()
-    await app.shutdown()
-    await runner.cleanup()
+    # Держим приложение запущенным
+    while True:
+        await asyncio.sleep(3600)  # Спим 1 час, чтобы не завершать процесс
 
 if __name__ == '__main__':
+    import asyncio
     asyncio.run(main())
