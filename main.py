@@ -12,6 +12,10 @@ PASSWORD = os.getenv('PASSWORD')
 PORT = int(os.getenv('PORT', 8443))  # Порт, который Render предоставляет
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # URL вашего сервиса, например https://your-service.onrender.com
 
+# Проверка WEBHOOK_URL
+if not WEBHOOK_URL:
+    raise ValueError("WEBHOOK_URL is not set in environment variables")
+
 # URL для авторизации (уточните после анализа)
 LOGIN_URL = 'https://animestars.org/login'
 LOGIN_DATA = {
@@ -86,9 +90,18 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("card", card))
 
+    # Инициализируем приложение
+    await app.initialize()
+    await app.start()
+
     # Настраиваем webhook
-    await app.bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
-    print(f"Webhook set to {WEBHOOK_URL}/{TOKEN}")
+    webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
+    try:
+        await app.bot.set_webhook(url=webhook_url)
+        print(f"Webhook set to {webhook_url}")
+    except Exception as e:
+        print(f"Failed to set webhook: {e}")
+        raise
 
     # Создаем веб-сервер
     web_app = web.Application()
