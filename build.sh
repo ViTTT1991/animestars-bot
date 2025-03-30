@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
+echo "Starting build process..."
+
+# Проверка прав на выполнение
+chmod +x /opt/render/project/src/build.sh
+echo "Ensuring build.sh is executable..."
+
 # Установка системных зависимостей для Chromium
 echo "Updating package list and installing dependencies..."
 apt-get update -y
@@ -49,3 +55,5 @@ pip install -r requirements.txt
 # Установка Playwright и браузеров
 echo "Installing Playwright and browsers..."
 playwright install --with-deps
+
+echo "Build process completed successfully!"

@@ -2,7 +2,7 @@ services:
   - type: web
     name: animestars-bot
     env: python
-    buildCommand: "./build.sh"
+    buildCommand: "./build.sh"  # Указываем выполнение build.sh
     startCommand: "python main.py"
     envVars:
       - key: TOKEN
