@@ -1,5 +1,5 @@
 import os
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -16,37 +16,72 @@ WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # URL вашего сервиса
 if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL is not set in environment variables")
 
-# URL для авторизации
+# URL для авторизации и целевой страницы
 LOGIN_URL = 'https://animestars.org/login'
 TARGET_URL = 'https://animestars.org/clubs/137/boost/'
-LOGIN_DATA = {
-    'username': USERNAME,
-    'password': PASSWORD
-}
 
-# Создаем сессию с заголовками
-session = requests.Session()
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Referer': 'https://animestars.org/',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-}
+# Создаем сессию с cloudscraper
+session = cloudscraper.create_scraper()
+
+# Функция для извлечения CSRF-токена и других скрытых полей
+def get_login_form_data():
+    try:
+        print(f"Получение формы авторизации с {LOGIN_URL}")
+        response = session.get(LOGIN_URL)
+        print(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
+        if response.status_code != 200:
+            print(f"Не удалось загрузить страницу логина: {response.text}")
+            return None
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        form = soup.find('form', {'action': '/login'})  # Ищем форму логина
+        if not form:
+            print("Форма логина не найдена")
+            return None
+
+        # Извлекаем скрытые поля
+        login_data = {
+            'login': USERNAME,
+            'password': PASSWORD,
+            'login_not_save': '0',  # DLE часто использует это поле
+        }
+
+        # Добавляем все скрытые поля из формы
+        for input_tag in form.find_all('input', type='hidden'):
+            name = input_tag.get('name')
+            value = input_tag.get('value')
+            if name and value:
+                login_data[name] = value
+
+        print(f"Собранные данные для авторизации: {login_data}")
+        return login_data
+    except Exception as e:
+        print(f"Ошибка при получении формы авторизации: {e}")
+        return None
 
 # Функция для авторизации
 def authenticate():
     try:
-        print(f"Попытка авторизации с данными: username={USERNAME}")
-        response = session.post(LOGIN_URL, data=LOGIN_DATA, headers=headers)
+        login_data = get_login_form_data()
+        if not login_data:
+            print("Не удалось собрать данные для авторизации")
+            return False
+
+        print(f"Попытка авторизации с данными: {login_data}")
+        response = session.post(LOGIN_URL, data=login_data)
         print(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
         if response.status_code == 200:
             print("Авторизация успешна")
             # Проверяем наличие cookies для подтверждения авторизации
             if any(cookie.name.startswith('__cf') for cookie in session.cookies):
                 print("Обнаружены Cloudflare cookies, авторизация может быть успешной")
-            return True
+            # Проверяем, перенаправлены ли мы на главную страницу (успешная авторизация)
+            if 'login' not in response.url:
+                print("Перенаправление после авторизации: авторизация подтверждена")
+                return True
+            else:
+                print("Авторизация не удалась: остались на странице логина")
+                return False
         else:
             print(f"Ошибка авторизации: статус {response.status_code}, текст ответа: {response.text}")
             return False
@@ -62,7 +97,7 @@ def get_card_info():
     
     print(f"Запрос данных с {TARGET_URL}")
     try:
-        response = session.get(TARGET_URL, headers=headers)
+        response = session.get(TARGET_URL)
         print(f"Статус ответа от {TARGET_URL}: {response.status_code}")
         if response.status_code != 200:
             print(f"Не удалось загрузить страницу: статус {response.status_code}, текст: {response.text}")
