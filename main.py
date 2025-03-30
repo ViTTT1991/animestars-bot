@@ -29,12 +29,14 @@ session = requests.Session()
 # Функция для авторизации
 def authenticate():
     try:
+        print(f"Попытка авторизации с данными: username={USERNAME}")
         response = session.post(LOGIN_URL, data=LOGIN_DATA)
+        print(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
         if response.status_code == 200:
             print("Авторизация успешна")
             return True
         else:
-            print(f"Ошибка авторизации: {response.status_code}")
+            print(f"Ошибка авторизации: статус {response.status_code}, текст ответа: {response.text}")
             return False
     except Exception as e:
         print(f"Ошибка при авторизации: {e}")
@@ -43,11 +45,18 @@ def authenticate():
 # Функция для парсинга данных
 def get_card_info():
     if not authenticate():
+        print("Не удалось авторизоваться, возвращаем ошибку")
         return "Ошибка авторизации", []
     
     url = "https://animestars.org/clubs/137/boost/"
+    print(f"Запрос данных с {url}")
     try:
         response = session.get(url)
+        print(f"Статус ответа от {url}: {response.status_code}")
+        if response.status_code != 200:
+            print(f"Не удалось загрузить страницу: статус {response.status_code}, текст: {response.text}")
+            return "Не удалось загрузить страницу", []
+
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Примерные селекторы (уточните после анализа HTML)
@@ -55,8 +64,11 @@ def get_card_info():
         if card_section:
             current_card = card_section.find('h3').text.strip()  # Название карты
             users = [user.text.strip() for user in card_section.select('ul.users-list li')]  # Список пользователей
+            print(f"Найдена карта: {current_card}, владельцы: {users}")
             return current_card, users
-        return "Информация недоступна", []
+        else:
+            print("Секция с картой не найдена, проверьте селектор")
+            return "Информация о карте не найдена", []
     except Exception as e:
         print(f"Ошибка при запросе данных: {e}")
         return "Ошибка загрузки данных", []
