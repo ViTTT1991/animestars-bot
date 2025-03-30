@@ -10,30 +10,42 @@ TOKEN = os.getenv('TOKEN')
 USERNAME = os.getenv('USERNAME')
 PASSWORD = os.getenv('PASSWORD')
 PORT = int(os.getenv('PORT', 8443))  # Порт, который Render предоставляет
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # URL вашего сервиса, например https://your-service.onrender.com
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # URL вашего сервиса
 
 # Проверка WEBHOOK_URL
 if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL is not set in environment variables")
 
-# URL для авторизации (уточните после анализа)
+# URL для авторизации
 LOGIN_URL = 'https://animestars.org/login'
+TARGET_URL = 'https://animestars.org/clubs/137/boost/'
 LOGIN_DATA = {
     'username': USERNAME,
     'password': PASSWORD
 }
 
-# Создаем сессию
+# Создаем сессию с заголовками
 session = requests.Session()
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Referer': 'https://animestars.org/',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+}
 
 # Функция для авторизации
 def authenticate():
     try:
         print(f"Попытка авторизации с данными: username={USERNAME}")
-        response = session.post(LOGIN_URL, data=LOGIN_DATA)
+        response = session.post(LOGIN_URL, data=LOGIN_DATA, headers=headers)
         print(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
         if response.status_code == 200:
             print("Авторизация успешна")
+            # Проверяем наличие cookies для подтверждения авторизации
+            if any(cookie.name.startswith('__cf') for cookie in session.cookies):
+                print("Обнаружены Cloudflare cookies, авторизация может быть успешной")
             return True
         else:
             print(f"Ошибка авторизации: статус {response.status_code}, текст ответа: {response.text}")
@@ -48,11 +60,10 @@ def get_card_info():
         print("Не удалось авторизоваться, возвращаем ошибку")
         return "Ошибка авторизации", []
     
-    url = "https://animestars.org/clubs/137/boost/"
-    print(f"Запрос данных с {url}")
+    print(f"Запрос данных с {TARGET_URL}")
     try:
-        response = session.get(url)
-        print(f"Статус ответа от {url}: {response.status_code}")
+        response = session.get(TARGET_URL, headers=headers)
+        print(f"Статус ответа от {TARGET_URL}: {response.status_code}")
         if response.status_code != 200:
             print(f"Не удалось загрузить страницу: статус {response.status_code}, текст: {response.text}")
             return "Не удалось загрузить страницу", []
