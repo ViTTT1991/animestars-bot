@@ -1,6 +1,7 @@
 import os
 import requests
 import asyncio
+import signal
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -97,9 +98,24 @@ async def main():
     await app.updater.start_polling()
     print("Bot started with polling")
 
-    # Держим приложение запущенным
-    while True:
-        await asyncio.sleep(3600)  # Спим 1 час, чтобы не завершать процесс
+    # Обработка завершения
+    loop = asyncio.get_event_loop()
+    stop = asyncio.Event()
+
+    def handle_shutdown():
+        stop.set()
+
+    loop.add_signal_handler(signal.SIGINT, handle_shutdown)
+    loop.add_signal_handler(signal.SIGTERM, handle_shutdown)
+
+    await stop.wait()  # Ждем сигнала завершения
+
+    # Останавливаем polling и приложение
+    print("Shutting down bot...")
+    await app.updater.stop()
+    await app.stop()
+    await app.shutdown()
+    await runner.cleanup()
 
 if __name__ == '__main__':
     asyncio.run(main())
