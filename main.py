@@ -4,6 +4,11 @@ from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from aiohttp import web
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Получаем переменные окружения
 TOKEN = os.getenv('TOKEN')
@@ -43,17 +48,17 @@ headers = {
 # Функция для извлечения данных формы авторизации
 def get_login_form_data():
     try:
-        print(f"Получение формы авторизации с {LOGIN_URL}")
+        logger.debug(f"Получение формы авторизации с {LOGIN_URL}")
         response = session.get(LOGIN_URL, headers=headers)
-        print(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
+        logger.debug(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
         if response.status_code != 200:
-            print(f"Не удалось загрузить страницу логина: {response.text}")
+            logger.error(f"Не удалось загрузить страницу логина: {response.text}")
             return None
 
         soup = BeautifulSoup(response.text, 'html.parser')
         form = soup.find('form', {'action': '/login'})  # Ищем форму логина
         if not form:
-            print("Форма логина не найдена")
+            logger.error("Форма логина не найдена")
             return None
 
         # Собираем данные для авторизации
@@ -70,10 +75,10 @@ def get_login_form_data():
             if name:
                 login_data[name] = value
 
-        print(f"Собранные данные для авторизации: {login_data}")
+        logger.debug(f"Собранные данные для авторизации: {login_data}")
         return login_data
     except Exception as e:
-        print(f"Ошибка при получении формы авторизации: {e}")
+        logger.error(f"Ошибка при получении формы авторизации: {e}")
         return None
 
 # Функция для авторизации
@@ -81,43 +86,43 @@ def authenticate():
     try:
         login_data = get_login_form_data()
         if not login_data:
-            print("Не удалось собрать данные для авторизации")
+            logger.error("Не удалось собрать данные для авторизации")
             return False
 
-        print(f"Попытка авторизации с данными: {login_data}")
+        logger.debug(f"Попытка авторизации с данными: {login_data}")
         response = session.post(LOGIN_URL, data=login_data, headers=headers)
-        print(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
+        logger.debug(f"Статус ответа от {LOGIN_URL}: {response.status_code}")
         if response.status_code == 200:
-            print("Авторизация успешна")
+            logger.info("Авторизация успешна")
             # Проверяем наличие cookies для подтверждения авторизации
             if any(cookie.name.startswith('__cf') for cookie in session.cookies):
-                print("Обнаружены Cloudflare cookies, авторизация может быть успешной")
+                logger.info("Обнаружены Cloudflare cookies, авторизация может быть успешной")
             # Проверяем перенаправление (успешная авторизация)
             if 'login' not in response.url:
-                print(f"Перенаправление после авторизации: {response.url}")
+                logger.info(f"Перенаправление после авторизации: {response.url}")
                 return True
             else:
-                print("Авторизация не удалась: остались на странице логина")
+                logger.warning("Авторизация не удалась: остались на странице логина")
                 return False
         else:
-            print(f"Ошибка авторизации: статус {response.status_code}, текст ответа: {response.text}")
+            logger.error(f"Ошибка авторизации: статус {response.status_code}, текст ответа: {response.text}")
             return False
     except Exception as e:
-        print(f"Ошибка при авторизации: {e}")
+        logger.error(f"Ошибка при авторизации: {e}")
         return False
 
 # Функция для парсинга данных
 def get_card_info():
     if not authenticate():
-        print("Не удалось авторизоваться, возвращаем ошибку")
+        logger.error("Не удалось авторизоваться, возвращаем ошибку")
         return "Ошибка авторизации", []
     
-    print(f"Запрос данных с {TARGET_URL}")
+    logger.debug(f"Запрос данных с {TARGET_URL}")
     try:
         response = session.get(TARGET_URL, headers=headers)
-        print(f"Статус ответа от {TARGET_URL}: {response.status_code}")
+        logger.debug(f"Статус ответа от {TARGET_URL}: {response.status_code}")
         if response.status_code != 200:
-            print(f"Не удалось загрузить страницу: статус {response.status_code}, текст: {response.text}")
+            logger.error(f"Не удалось загрузить страницу: статус {response.status_code}, текст: {response.text}")
             return "Не удалось загрузить страницу", []
 
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -127,13 +132,13 @@ def get_card_info():
         if card_section:
             current_card = card_section.find('h3').text.strip()  # Название карты
             users = [user.text.strip() for user in card_section.select('ul.users-list li')]  # Список пользователей
-            print(f"Найдена карта: {current_card}, владельцы: {users}")
+            logger.info(f"Найдена карта: {current_card}, владельцы: {users}")
             return current_card, users
         else:
-            print("Секция с картой не найдена, проверьте селектор")
+            logger.warning("Секция с картой не найдена, проверьте селектор")
             return "Информация о карте не найдена", []
     except Exception as e:
-        print(f"Ошибка при запросе данных: {e}")
+        logger.error(f"Ошибка при запросе данных: {e}")
         return "Ошибка загрузки данных", []
 
 # Команда /start
@@ -173,9 +178,9 @@ async def main():
     webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
     try:
         await app.bot.set_webhook(url=webhook_url)
-        print(f"Webhook set to {webhook_url}")
+        logger.info(f"Webhook set to {webhook_url}")
     except Exception as e:
-        print(f"Failed to set webhook: {e}")
+        logger.error(f"Failed to set webhook: {e}")
         raise
 
     # Создаем веб-сервер
@@ -187,7 +192,7 @@ async def main():
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', PORT)
     await site.start()
-    print(f"Server started on port {PORT}")
+    logger.info(f"Server started on port {PORT}")
 
     # Держим приложение запущенным
     while True:
