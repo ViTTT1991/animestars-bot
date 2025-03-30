@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: animestars-bot
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "python main.py"
+    envVars:
+      - key: TOKEN
+        value: your_token
+      - key: USERNAME
+        value: your_username
+      - key: PASSWORD
+        value: your_password
+      - key: WEBHOOK_URL
+        value: https://animestars-bot.onrender.com
